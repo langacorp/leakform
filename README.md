@@ -117,22 +117,20 @@ retract a value that has already been readable: only revoking it does. Write two
 dates — when the credential lost its power, and when the last copy of it expires.
 The second one is usually *never*, as long as the history exists.
 
-## The other two
+## The other three
 
-`realroute`, `leakform` and `samecheck` came out of the same week of measuring.
-Each one is standalone and depends on neither of the others.
+`realroute`, `leakform`, `samecheck` and `provenreal` came out of the same
+weeks of measuring. Each one is standalone and depends on none of the others.
 
 - **[realroute](https://github.com/langacorp/realroute)** — checks that a route
   really exists, by content and not by status code. Born from a site that answered
-  `200` to every URL, so a status-code check called it green without having looked
-  at anything.
+  200 to an address that could not exist.
 - **[samecheck](https://github.com/langacorp/samecheck)** — measures whether the
-  copies that should be identical still are. Born from one file living in 29
-  copies, in 4 distinct versions, under 3 different naming conventions.
-
-What they share: coverage is always declared, a run that examined nothing is never
-a pass, and each ships a self-test that must fire in one direction and stay silent
-in the other.
+  copies that should be identical still are. Born from a component installed 47
+  times in six different versions.
+- **[provenreal](https://github.com/langacorp/provenreal)** — compares what a
+  system claims with what can be measured. Born from six different numbers
+  answering the same question.
 
 
 ## Where this comes from
