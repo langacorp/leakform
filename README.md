@@ -5,7 +5,7 @@ position and category, **never the value**.
 
 ## The defect it was born from
 
-**2026-08-27.** A repository whose last commit was five years old was searched for
+**2026-08-27.** One of our own repositories, last touched in 2021, was searched for
 secrets for the first time. It contained a database URI with credentials, a mail
 provider token and three signing keys — all readable the whole time, all in files
 that had been deleted years earlier and were still in the history.
@@ -108,6 +108,9 @@ Exit codes: `0` nothing found · `1` findings · `2` nothing was examined.
 
 ## After a finding
 
+It now runs before every publication of ours: no repository of ours goes public
+until this has been run over it.
+
 Rotate at the source. Rewriting the history or deleting the repository does not
 retract a value that has already been readable: only revoking it does. Write two
 dates — when the credential lost its power, and when the last copy of it expires.
@@ -129,6 +132,15 @@ Each one is standalone and depends on neither of the others.
 What they share: coverage is always declared, a run that examined nothing is never
 a pass, and each ships a self-test that must fire in one direction and stay silent
 in the other.
+
+
+## Where this comes from
+
+LANGA runs 16 digital services across 5 networks on its own infrastructure. This
+tool came out of a defect we hit while running them. See
+[How we work](https://about.langa.tv/come-lavoriamo/).
+
+---
 
 ## License
 
