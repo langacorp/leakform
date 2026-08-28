@@ -108,8 +108,9 @@ Exit codes: `0` nothing found · `1` findings · `2` nothing was examined.
 
 ## After a finding
 
-It now runs before every publication of ours: no repository of ours goes public
-until this has been run over it.
+It now runs before every publication of ours — every repository under
+[github.com/langacorp](https://github.com/langacorp) — and none goes public until
+this has been run over it.
 
 Rotate at the source. Rewriting the history or deleting the repository does not
 retract a value that has already been readable: only revoking it does. Write two
