@@ -167,7 +167,7 @@ weeks of measuring. Each one is standalone and depends on none of the others.
 
 ## Where this comes from
 
-LANGA runs 16 digital services across 5 networks on its own infrastructure.
+LANGA runs an ecosystem of digital services on its own infrastructure.
 This tool came out of a defect we hit while running them, and it is the reason
 the code behind those products could be opened up at all:
 
