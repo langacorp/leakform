@@ -5,6 +5,9 @@ Dates are the date of the commit, not of a release.
 
 ## 2026-08-30
 
+- Add `hooks/pre-commit`: stop a secret one second before it is committed
+  (POSIX sh, no dependencies). Reports file, line and category, never the value.
+- README: show the self-test badge
 - README: link the Galaxy products the tool was built against
 - README: correct a claim that did not match the code, and drop install counts
 

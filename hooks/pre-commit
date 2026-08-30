@@ -1,0 +1,77 @@
+#!/bin/sh
+# leakform pre-commit hook — stop a secret before it is committed.
+#
+# The scanner finds secrets that are already in the history. This finds them
+# one second earlier, which is the only second that matters: once a secret is
+# committed it is in the history for good, and rewriting history does not
+# revoke it.
+#
+# Install:
+#   cp hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+#
+# Skip once, on purpose and knowingly:
+#   git commit --no-verify
+#
+# POSIX sh. No bashisms, no dependencies beyond git and grep.
+
+set -eu
+
+RED=''; RESET=''
+if [ -t 2 ]; then RED=$(printf '\033[31m'); RESET=$(printf '\033[0m'); fi
+
+# Solo i file in stage, solo quelli aggiunti o modificati.
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+trovati=0
+report() {
+  trovati=$((trovati + 1))
+  printf '%s  %s:%s%s  %s\n' "$RED" "$1" "$2" "$RESET" "$3" >&2
+}
+
+# Le forme, non i nomi. Un segreto non sta solo dove si chiama "secret".
+# Ogni riga: etichetta<TAB>espressione regolare estesa.
+forme=$(cat <<'PATTERNS'
+URI con credenziali	[a-z][a-z0-9+.-]{2,15}://[A-Za-z0-9._%-]{3,}:[^[:space:]@/]{6,}@
+chiave privata PEM	-----BEGIN[A-Z ]*PRIVATE KEY-----
+token GitHub	gh[pousr]_[A-Za-z0-9]{30,}
+chiave Google	AIza[0-9A-Za-z_-]{30,}
+token Slack	xox[abprs]-[0-9A-Za-z-]{10,}
+chiave AWS	AKIA[0-9A-Z]{16}
+JWT	eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.
+PATTERNS
+)
+
+for f in $staged; do
+  # Solo testo. Un binario non si ispeziona: si salta e lo si dice.
+  git show ":$f" 2>/dev/null | head -c 4096 | grep -qI . || continue
+
+  printf '%s\n' "$forme" | while IFS="$(printf '\t')" read -r etichetta forma; do
+    [ -z "${forma:-}" ] && continue
+    git show ":$f" 2>/dev/null | grep -nE "$forma" | head -3 | while IFS=: read -r riga _; do
+      printf 'HIT\t%s\t%s\t%s\n' "$f" "$riga" "$etichetta"
+    done
+  done
+done > "/tmp/leakform-hook-hits.$$" 2>/dev/null || true
+
+hits="/tmp/leakform-hook-hits.$$"
+
+if [ -s "$hits" ]; then
+  printf '\n%sleakform: forme di segreto nei file in stage%s\n\n' "$RED" "$RESET" >&2
+  while IFS="$(printf '\t')" read -r _ file riga etichetta; do
+    report "$file" "$riga" "$etichetta"
+  done < "$hits"
+  unlink "$hits" 2>/dev/null || true
+  cat >&2 <<'MSG'
+
+Il valore non viene stampato: sapere dove basta a toglierlo.
+
+Se e' un falso positivo:  git commit --no-verify
+Se e' un segreto vero: toglilo, e consideralo uscito. Una rotazione non
+ritira il valore gia' letto.
+MSG
+  exit 1
+fi
+
+unlink "$hits" 2>/dev/null || true
+exit 0
