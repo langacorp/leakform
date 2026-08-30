@@ -95,6 +95,21 @@ python3 leakform.py project.git --json
 
 Exit codes: `0` nothing found · `1` findings · `2` nothing was examined.
 
+## The hook: one second earlier
+
+The scanner finds secrets that are already in the history. `hooks/pre-commit`
+finds them one second before, which is the only second that matters — once a
+secret is committed it is in the history for good, and rewriting history does
+not revoke the value.
+
+```sh
+cp hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+```
+
+POSIX sh, nothing beyond `git` and `grep`. It reports **file, line and
+category — never the value**: knowing where is enough to remove it. A false
+positive is committed deliberately with `git commit --no-verify`.
+
 ## Limits, stated
 
 - It reads blobs. It does not see build artefacts, CI secrets, or anything that
