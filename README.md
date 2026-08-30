@@ -126,8 +126,8 @@ weeks of measuring. Each one is standalone and depends on none of the others.
   really exists, by content and not by status code. Born from a site that answered
   200 to an address that could not exist.
 - **[samecheck](https://github.com/langacorp/samecheck)** — measures whether the
-  copies that should be identical still are. Born from a component installed 47
-  times in six different versions.
+  copies that should be identical still are. Born from a component that turned
+  out to have six distinct contents across its installations.
 - **[provenreal](https://github.com/langacorp/provenreal)** — compares what a
   system claims with what can be measured. Born from six different numbers
   answering the same question.
