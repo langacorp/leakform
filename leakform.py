@@ -133,8 +133,29 @@ class Finding:
         return (self.category, self.path, self.line, self.blob)
 
 
+GIT_TIMEOUT = int(os.environ.get("LEAKFORM_GIT_TIMEOUT", "120"))
+
+
+class GitTimeout(RuntimeError):
+    """git did not answer. Never silently treated as an empty repository."""
+
+
 def git(repo, *args):
-    return subprocess.run(("git",) + args, cwd=repo, capture_output=True)
+    """
+    Run git, and never wait forever.
+
+    Without a timeout a wedged git — a stale lock, a repository on a mount
+    that stopped answering — leaves the scan hanging with no output. In CI
+    that is a runner held until someone notices: it looks like work in
+    progress and it is nothing.
+    """
+    try:
+        return subprocess.run(("git",) + args, cwd=repo,
+                              capture_output=True, timeout=GIT_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise GitTimeout(
+            "git %s took longer than %ds. Raise LEAKFORM_GIT_TIMEOUT if the "
+            "repository is genuinely that large." % (args[0], GIT_TIMEOUT))
 
 
 def is_git_repo(path):
@@ -406,10 +427,15 @@ def main(argv=None):
         p.error("a repository path is required (or use --selftest)")
     if shutil.which("git") is None:
         p.error("git was not found on PATH")
-    if not is_git_repo(args.repository):
-        p.error(f"not a git repository: {args.repository}")
-
-    res = scan(args.repository, max_blob_bytes=args.max_blob_bytes)
+    try:
+        if not is_git_repo(args.repository):
+            p.error(f"not a git repository: {args.repository}")
+        res = scan(args.repository, max_blob_bytes=args.max_blob_bytes)
+    except GitTimeout as e:
+        # Same class of outcome as an empty scan: nothing was measured.
+        # Exit 2, not 1 and not 0 — a timeout is not a clean repository.
+        sys.stderr.write("%s\nNOTHING WAS EXAMINED. This is not a pass.\n" % e)
+        return 2
     if args.json:
         json.dump(res, sys.stdout, indent=2)
         sys.stdout.write("\n")

@@ -5,6 +5,8 @@ Dates are the date of the commit, not of a release.
 
 ## 2026-08-30
 
+- Every git call now has a timeout. A wedged git used to hang the scan with no
+  output; it now exits `2` — nothing was measured — instead of never returning.
 - Add `hooks/pre-commit`: stop a secret one second before it is committed.
   POSIX sh and awk, one pass per file, no temporary files. Finds known shapes
   and unknown ones (a high-variety value next to a name that promises a

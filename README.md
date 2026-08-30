@@ -95,6 +95,10 @@ python3 leakform.py project.git --json
 
 Exit codes: `0` nothing found · `1` findings · `2` nothing was examined.
 
+A `git` that does not answer counts as `2`, not as a clean repository. Every
+git call has a timeout (`LEAKFORM_GIT_TIMEOUT`, 120s by default): a scan that
+hangs in CI looks like work in progress and is nothing.
+
 ## The hook: one second earlier
 
 The scanner finds secrets that are already in the history. `hooks/pre-commit`
