@@ -5,8 +5,11 @@ Dates are the date of the commit, not of a release.
 
 ## 2026-08-30
 
-- Add `hooks/pre-commit`: stop a secret one second before it is committed
-  (POSIX sh, no dependencies). Reports file, line and category, never the value.
+- Add `hooks/pre-commit`: stop a secret one second before it is committed.
+  POSIX sh and awk, one pass per file, no temporary files. Finds known shapes
+  and unknown ones (a high-variety value next to a name that promises a
+  secret). Reports file, line and category, never the value — and declares
+  what it did not inspect even when it passes.
 - README: show the self-test badge
 - README: link the Galaxy products the tool was built against
 - README: correct a claim that did not match the code, and drop install counts

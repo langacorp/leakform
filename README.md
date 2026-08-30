@@ -106,9 +106,20 @@ not revoke the value.
 cp hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 ```
 
-POSIX sh, nothing beyond `git` and `grep`. It reports **file, line and
-category — never the value**: knowing where is enough to remove it. A false
-positive is committed deliberately with `git commit --no-verify`.
+POSIX sh and `awk`, one pass per file, **no temporary files** — a hook that
+writes what it found about secrets into a world-readable `/tmp` file has missed
+its own point.
+
+It looks for two things: **known shapes** (credential URIs, PEM blocks, GitHub
+and Google and Slack and AWS keys, JWTs) and **unknown ones** — a long value
+with many distinct characters sitting next to a name that promises a secret.
+The second catches what has no recognisable prefix, which is most of them.
+
+It reports **file, line and category — never the value**. And it **declares
+what it did not inspect** even when it passes, because a file that was skipped
+and produced no finding looks exactly like a clean one.
+
+A false positive is committed deliberately with `git commit --no-verify`.
 
 ## Limits, stated
 
