@@ -1,5 +1,7 @@
 # leakform
 
+[![self-test](https://github.com/langacorp/leakform/actions/workflows/selftest.yml/badge.svg)](https://github.com/langacorp/leakform/actions/workflows/selftest.yml)
+
 Find secrets in a git repository **by shape**, across **every ref** — and report
 position and category, **never the value**.
 
