@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: If you use this software, please cite it as below.
+type: software
+title: "leakform"
+abstract: "Find secrets in a git repository by shape, across every ref and every deleted file. Position and category, never the value. Runs before every publication from AEGIS."
+authors:
+  - name: "LANGA Corp. Srl"
+    city: Milan
+    country: IT
+    website: "https://langa.tv"
+repository-code: "https://github.com/langacorp/leakform"
+url: "https://github.com/langacorp/leakform"
+license: MIT
+version: "1.1.0"
+date-released: "2026-08-30"
