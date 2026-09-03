@@ -140,30 +140,33 @@ A false positive is committed deliberately with `git commit --no-verify`.
 
 ## After a finding
 
-It now runs before every publication of ours — every repository under
-[github.com/langacorp](https://github.com/langacorp) — and none goes public until
-this has been run over it.
+It runs over every tool in this set before that tool is published: none of them
+went public until this had been run over it.
 
 Rotate at the source. Rewriting the history or deleting the repository does not
 retract a value that has already been readable: only revoking it does. Write two
 dates — when the credential lost its power, and when the last copy of it expires.
 The second one is usually *never*, as long as the history exists.
 
-## The other three
+## The other tools
 
-`realroute`, `leakform`, `samecheck` and `provenreal` came out of the same
-weeks of measuring. Each one is standalone and depends on none of the others.
+Each came out of a defect measured on our own estate. Each one is standalone
+and depends on none of the others.
 
 - **[realroute](https://github.com/langacorp/realroute)** — checks that a route
-  really exists, by content and not by status code. Born from a site that answered
-  200 to an address that could not exist.
+  really exists, by content and not by status code.
 - **[samecheck](https://github.com/langacorp/samecheck)** — measures whether the
-  copies that should be identical still are. Born from a component that turned
-  out to have six distinct contents across its installations.
+  copies that should be identical still are, and never says which one is right.
 - **[provenreal](https://github.com/langacorp/provenreal)** — compares what a
-  system claims with what can be measured. Born from six different numbers
-  answering the same question.
+  system claims with what can be measured, from independent sources.
+- **[countdrift](https://github.com/langacorp/countdrift)** — finds numbers
+  written by hand that no longer match their source.
+- **[kemproof](https://github.com/langacorp/kemproof)** — attests that an
+  ML-KEM-768 key exchange really happened. It does not encrypt anything.
 
+The set is kept on the [organisation profile](https://github.com/langacorp).
+It is not written here as a count, because a number typed by hand is the thing
+countdrift exists to find.
 
 ## Where this comes from
 
