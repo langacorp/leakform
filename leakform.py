@@ -142,6 +142,21 @@ class GitTimeout(RuntimeError):
     """git did not answer. Never silently treated as an empty repository."""
 
 
+# Variables with which git locates a repository. Inside a git hook they point
+# at the repository being committed to, and they win over cwd: left in place,
+# the scan reads that repository and reports on it under another name.
+_GIT_LOCATION_ENV = (
+    "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR", "GIT_PREFIX",
+    "GIT_IMPLICIT_WORK_TREE", "GIT_NAMESPACE", "GIT_SHALLOW_FILE",
+    "GIT_GRAFT_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE",
+)
+
+
+def _git_env():
+    return {k: v for k, v in os.environ.items() if k not in _GIT_LOCATION_ENV}
+
+
 def git(repo, *args):
     """
     Run git, and never wait forever.
@@ -152,7 +167,7 @@ def git(repo, *args):
     progress and it is nothing.
     """
     try:
-        return subprocess.run(("git",) + args, cwd=repo,
+        return subprocess.run(("git",) + args, cwd=repo, env=_git_env(),
                               capture_output=True, timeout=GIT_TIMEOUT)
     except subprocess.TimeoutExpired:
         raise GitTimeout(
@@ -294,6 +309,9 @@ def report(res, stream=sys.stdout):
 # --------------------------------------------------------------------------
 
 def _make_repo(path, files, then_delete=(), second_commit=None):
+    # The fixtures are planted secrets: a pre-commit hook installed globally
+    # (this project's own, for instance) is right to refuse them, and a
+    # refused commit would leave the self-test scanning an empty repository.
     os.makedirs(path, exist_ok=True)
     git(path, "init", "-q", "-b", "main")
     git(path, "config", "user.email", "selftest@invalid")
@@ -304,7 +322,7 @@ def _make_repo(path, files, then_delete=(), second_commit=None):
         with open(full, "wb") as fh:
             fh.write(content)
     git(path, "add", "-A")
-    git(path, "commit", "-q", "-m", "first")
+    git(path, "-c", "commit.gpgsign=false", "commit", "-q", "--no-verify", "-m", "first")
     if then_delete:
         for name in then_delete:
             os.remove(os.path.join(path, name))
@@ -312,7 +330,7 @@ def _make_repo(path, files, then_delete=(), second_commit=None):
             with open(os.path.join(path, name), "wb") as fh:
                 fh.write(content)
         git(path, "add", "-A")
-        git(path, "commit", "-q", "-m", "second")
+        git(path, "-c", "commit.gpgsign=false", "commit", "-q", "--no-verify", "-m", "second")
     return path
 
 
