@@ -21,24 +21,56 @@ permissions:
 
 jobs:
   selftest:
-    runs-on: ubuntu-latest
+    # ubuntu-22.04 keeps the floor honest: Python 3.8 is still installable
+    # there, and its git (2.34) is older than the 2.36 that some options
+    # need. The newest runner covers the other end.
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.9", "3.13"]
+        include:
+          - { os: ubuntu-22.04, python: "3.8" }
+          - { os: ubuntu-latest, python: "3.9" }
+          - { os: ubuntu-latest, python: "3.11" }
+          - { os: ubuntu-latest, python: "3.13" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
 
       # A file that does not compile is a test that never ran, and from the
       # outside it looks exactly like one that passed.
       - name: Compile
-        run: python -m compileall -q leakform.py
+        run: python -m compileall -q leakform.py tests
 
       # Both directions: it must fire on a planted case and stay silent on a
       # clean one. A check that only ever passes proves nothing.
       - name: Self-test
         run: python leakform.py --selftest
+
+      # Every category, every exit code, every git failure, and the hook in
+      # temporary repositories. Each test was seen failing before its fix.
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+
+  hook:
+    # The hook runs under whatever awk the machine has. mawk is the default
+    # on Debian and Ubuntu, gawk elsewhere; the hook was once right for one
+    # and silent on the other, so both are run here.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install the awks
+        run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends mawk gawk
+
+      - name: Hook under mawk and gawk
+        env:
+          LEAKFORM_TEST_AWKS: /usr/bin/mawk:/usr/bin/gawk
+        run: python -m unittest discover -s tests -p test_hook.py -v
