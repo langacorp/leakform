@@ -375,6 +375,13 @@ def report(res, stream=sys.stdout):
 
     if c["blobs_examined"] == 0:
         stream.write("NOTHING WAS EXAMINED. This is not a pass.\n")
+    return exit_code(res)
+
+
+def exit_code(res):
+    """0 nothing found, 1 findings, 2 nothing was examined. One rule for
+    every output mode: --json used to return 0 for an empty scan."""
+    if res["coverage"]["blobs_examined"] == 0:
         return 2
     return 1 if (res["findings"] or res["sensitive_names"]) else 0
 
@@ -540,7 +547,7 @@ def main(argv=None):
     if args.json:
         json.dump(res, sys.stdout, indent=2)
         sys.stdout.write("\n")
-        return 1 if (res["findings"] or res["sensitive_names"]) else 0
+        return exit_code(res)
     return report(res)
 
 

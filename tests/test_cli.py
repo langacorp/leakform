@@ -61,6 +61,14 @@ class Cli(unittest.TestCase):
         self.assertEqual(r.returncode, 2)
         self.assertIn("NOTHING WAS EXAMINED", r.stderr)
 
+    def test_json_nothing_examined_is_2(self):
+        # Same outcome as the text mode: an empty scan is not a pass.
+        repo = make_repo(self, {"a.png": "\x89PNG\r\n"})
+        r = run_cli(repo, "--json")
+        self.assertEqual(run_cli(repo).returncode, 2)
+        self.assertEqual(r.returncode, 2)
+        self.assertEqual(json.loads(r.stdout)["coverage"]["blobs_examined"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
