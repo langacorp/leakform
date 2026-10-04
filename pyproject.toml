@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "leakform"
+dynamic = ["version"]
+description = "Find secrets in a git repository by shape, across every ref. Position and category, never the value."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "LANGA Corp. Srl"}]
+requires-python = ">=3.8"
+dependencies = []
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Environment :: Console",
+    "Topic :: Security",
+    "Topic :: Software Development :: Version Control :: Git",
+]
+
+[project.urls]
+Homepage = "https://github.com/langacorp/leakform"
+Source = "https://github.com/langacorp/leakform"
+Changelog = "https://github.com/langacorp/leakform/blob/main/CHANGELOG.md"
+
+[project.scripts]
+leakform = "leakform:_entry"
+
+[tool.setuptools]
+py-modules = ["leakform"]
+
+[tool.setuptools.dynamic]
+version = {attr = "leakform.__version__"}
