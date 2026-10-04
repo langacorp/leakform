@@ -40,11 +40,13 @@ __version__ = "0.1.0"
 # announce itself with a vendor prefix.
 
 PATTERNS = [
-    ("pem-private-key",     rb"-----BEGIN [A-Z ]{0,30}PRIVATE KEY-----"),
-    ("pem-certificate",     rb"-----BEGIN CERTIFICATE-----"),
-    ("ssh-private-key",     rb"-----BEGIN OPENSSH PRIVATE KEY-----"),
+    # The PEM headers are split in two literals, so that this file does not
+    # match itself: the tool is run over its own repository.
+    ("pem-private-key",     rb"-----BEGIN [A-Z ]{0,30}PRIVATE" rb" KEY-----"),
+    ("pem-certificate",     rb"-----BEGIN CERTIFI" rb"CATE-----"),
+    ("ssh-private-key",     rb"-----BEGIN OPENSSH PRIVATE" rb" KEY-----"),
     ("putty-private-key",   rb"PuTTY-User-Key-File-\d"),
-    ("pgp-private-key",     rb"-----BEGIN PGP PRIVATE KEY BLOCK-----"),
+    ("pgp-private-key",     rb"-----BEGIN PGP PRIVATE" rb" KEY BLOCK-----"),
     ("google-api-key",      rb"AIza[0-9A-Za-z_\-]{35}"),
     ("google-oauth-client", rb"[0-9]{10,14}-[0-9a-z]{20,40}\.apps\.googleusercontent\.com"),
     ("google-client-secret", rb"GOCSPX-[0-9A-Za-z_\-]{20,}"),
@@ -325,14 +327,19 @@ def selftest(stream=sys.stdout):
     tmp = tempfile.mkdtemp(prefix="leakform-selftest-")
     try:
         # ---- direction 1: must fire, and on a blob that is NO LONGER in HEAD
+        # Fake values, assembled at run time: stored whole in this file they
+        # would be found by any scanner run over this repository - this one
+        # included - and by push protection on the way in.
         dirty_env = (
-            b"DB_URL=postgres://appuser:hunter2hunter2@db.internal:5432/app\n"
-            b"API_KEY=AIzaSyB1nP7qX9wLmK4tR6vZ2yH8jC3dF5gN0aQ\n"
-            b"SESSION=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0"
-            b".dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk\n")
-        key = (b"-----BEGIN RSA PRIVATE KEY-----\n"
-               b"MIIEowIBAAKCAQEA0Z9k3mQpLxVrTnB7cWfHsYdKgJ4uEaN2iOvXlQzRtMbC\n"
-               b"-----END RSA PRIVATE KEY-----\n")
+            b"DB_URL=postgres" + b"://appuser:" + b"fake-fixture-pw"
+            + b"@db.example.invalid:5432/app\n"
+            + b"API_KEY=" + b"AI" + b"za" + b"FAKEfixture_not_a_real" + b"_key_00000000\n"
+            + b"SESSION=" + b"ey" + b"JhbGciOiJub25lIn0" + b"."
+            + b"ey" + b"JzdWIiOiJmYWtlLWZpeHR1cmUifQ" + b".fake_fixture_sig\n")
+        dash = b"-" * 5
+        key = (dash + b"BEGIN RSA PRIVATE" + b" KEY" + dash + b"\n"
+               + b"FAKEFIXTURENOTAKEY" * 3 + b"\n"
+               + dash + b"END RSA PRIVATE" + b" KEY" + dash + b"\n")
         clean_after = (b"<?php\n$dsn = getenv('DB_URL');\n"
                        b"$key = $_ENV['API_KEY'];\n")
         dirty = _make_repo(
