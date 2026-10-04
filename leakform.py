@@ -142,6 +142,20 @@ class GitTimeout(RuntimeError):
     """git did not answer. Never silently treated as an empty repository."""
 
 
+class GitFailed(RuntimeError):
+    """git answered with an error. Its empty output is not an empty answer."""
+
+
+def git_ok(repo, *args):
+    """Run git and return stdout, or raise: a failure is not an empty list."""
+    r = git(repo, *args)
+    if r.returncode != 0:
+        msg = r.stderr.decode("utf-8", "replace").strip().splitlines()
+        raise GitFailed("git %s failed (exit %d): %s" % (
+            args[0], r.returncode, msg[-1] if msg else "no message"))
+    return r.stdout
+
+
 # Variables with which git locates a repository. Inside a git hook they point
 # at the repository being committed to, and they win over cwd: left in place,
 # the scan reads that repository and reports on it under another name.
@@ -191,15 +205,15 @@ def blob_paths(repo):
     also covers a tag that points straight at a blob or a tree.
     """
     paths = collections.defaultdict(set)
-    for line in git(repo, "rev-list", "--objects", "--all").stdout.split(b"\n"):
+    for line in git_ok(repo, "rev-list", "--objects", "--all").split(b"\n"):
         if b" " in line:
             sha, _, p = line.partition(b" ")
             paths[sha.decode()].add(p.decode("utf-8", "replace"))
 
     # -z: paths verbatim, not quoted. --no-renames: a rename is a delete and
     # an add, so both names appear. -m: merges against each parent.
-    out = git(repo, "log", "--all", "--raw", "--no-renames", "--root", "-m",
-              "--no-abbrev", "--format=", "-z").stdout
+    out = git_ok(repo, "log", "--all", "--raw", "--no-renames", "--root", "-m",
+                 "--no-abbrev", "--format=", "-z")
     fields = out.split(b"\0")
     i = 0
     while i < len(fields):
@@ -220,6 +234,26 @@ def blob_paths(repo):
     return paths
 
 
+def blobs_in_head(repo):
+    """The blobs of the whole tree at HEAD. Empty only if there is no HEAD.
+
+    `--full-tree`: given a subdirectory, ls-tree lists only that directory,
+    and everything above it was reported as history only. No `--format`:
+    it arrived in git 2.36, and on an older git the call failed, its empty
+    output was read as an empty HEAD, and every finding moved to history.
+    """
+    if git(repo, "rev-parse", "--verify", "-q", "HEAD^{tree}").returncode != 0:
+        return set()   # unborn branch: there is no HEAD to be in
+    out = git_ok(repo, "ls-tree", "-r", "-z", "--full-tree", "HEAD")
+    head = set()
+    for entry in out.split(b"\0"):
+        # <mode> SP <type> SP <object> TAB <path>
+        meta = entry.partition(b"\t")[0].split()
+        if len(meta) == 3 and meta[1] == b"blob":
+            head.add(meta[2].decode())
+    return head
+
+
 def compiled():
     return [(name, re.compile(rx)) for name, rx in PATTERNS]
 
@@ -231,16 +265,12 @@ def scan(repo, max_blob_bytes=MAX_BLOB_BYTES):
     # blob -> the paths it has ever had. One blob can live at several paths.
     paths = blob_paths(repo)
 
-    head_blobs = set()
-    out = git(repo, "ls-tree", "-r", "--format=%(objectname)", "HEAD").stdout
-    for line in out.split(b"\n"):
-        if line.strip():
-            head_blobs.add(line.strip().decode())
+    head_blobs = blobs_in_head(repo)
 
     blobs = []
-    check = git(repo, "cat-file", "--batch-all-objects",
-                "--batch-check=%(objectname) %(objecttype) %(objectsize)")
-    for line in check.stdout.split(b"\n"):
+    check = git_ok(repo, "cat-file", "--batch-all-objects",
+                   "--batch-check=%(objectname) %(objecttype) %(objectsize)")
+    for line in check.split(b"\n"):
         f = line.split()
         if len(f) == 3 and f[1] == b"blob":
             blobs.append((f[0].decode(), int(f[2])))
@@ -265,7 +295,13 @@ def scan(repo, max_blob_bytes=MAX_BLOB_BYTES):
         if size > max_blob_bytes:
             skipped["larger-than-limit"] += 1
             continue
-        data = git(repo, "cat-file", "blob", sha).stdout
+        r = git(repo, "cat-file", "blob", sha)
+        if r.returncode != 0:
+            # A blob git cannot read was not examined. Counting it as
+            # examined would turn a corrupt object into a clean one.
+            skipped["unreadable"] += 1
+            continue
+        data = r.stdout
         if b"\x00" in data[:8192]:
             skipped["binary-content"] += 1
             continue
@@ -284,8 +320,8 @@ def scan(repo, max_blob_bytes=MAX_BLOB_BYTES):
                 findings.append(Finding(name, path, line, len(value), sha, in_head))
                 break  # one hit per category per blob is enough to act on
 
-    refs = [l.split()[-1].decode() for l in
-            git(repo, "for-each-ref", "--format=%(refname)").stdout.split(b"\n")
+    refs = [l.strip().decode("utf-8", "replace") for l in
+            git_ok(repo, "for-each-ref", "--format=%(refname)").split(b"\n")
             if l.strip()]
 
     return {
@@ -495,9 +531,10 @@ def main(argv=None):
         if not is_git_repo(args.repository):
             p.error(f"not a git repository: {args.repository}")
         res = scan(args.repository, max_blob_bytes=args.max_blob_bytes)
-    except GitTimeout as e:
+    except (GitTimeout, GitFailed) as e:
         # Same class of outcome as an empty scan: nothing was measured.
-        # Exit 2, not 1 and not 0 — a timeout is not a clean repository.
+        # Exit 2, not 1 and not 0 — a timeout or a git error is not a
+        # clean repository.
         sys.stderr.write("%s\nNOTHING WAS EXAMINED. This is not a pass.\n" % e)
         return 2
     if args.json:
