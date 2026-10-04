@@ -53,11 +53,22 @@ defect this tool exists to make visible.
 
 ## Install
 
-None. Python 3.8+, standard library only, plus `git` on `PATH`.
+None needed. Python 3.8+, standard library only, plus `git` on `PATH`.
 
 ```
 curl -O https://raw.githubusercontent.com/langacorp/leakform/main/leakform.py
 python3 leakform.py --selftest
+```
+
+Or install it from the repository, which gives a `leakform` command. It is
+not published on PyPI.
+
+```
+pipx install git+https://github.com/langacorp/leakform
+# or
+pip install git+https://github.com/langacorp/leakform
+
+leakform --selftest
 ```
 
 ## Prove it before you trust it
@@ -80,6 +91,15 @@ Either of the first two failing fails the whole test. A check that has only been
 exercised in the direction where it passes is indistinguishable from one that
 always passes.
 
+The unit tests go further: every category with a fixture of its own, every exit
+code, git failing in the ways it has been seen failing, and the hook in temporary
+repositories. Every secret-shaped fixture is assembled at run time, so this
+repository passes its own scan.
+
+```
+python3 -m unittest discover -s tests -v
+```
+
 ## Use
 
 ```
@@ -93,11 +113,16 @@ python3 leakform.py project.git
 python3 leakform.py project.git --json
 ```
 
-Exit codes: `0` nothing found · `1` findings · `2` nothing was examined.
+Exit codes: `0` nothing found · `1` findings · `2` nothing was examined. The
+same with `--json`.
 
-A `git` that does not answer counts as `2`, not as a clean repository. Every
-git call has a timeout (`LEAKFORM_GIT_TIMEOUT`, 120s by default): a scan that
-hangs in CI looks like work in progress and is nothing.
+A `git` that does not answer, or answers with an error, counts as `2`, not as a
+clean repository. Every git call has a timeout (`LEAKFORM_GIT_TIMEOUT`, 120s by
+default): a scan that hangs in CI looks like work in progress and is nothing. A
+blob git cannot read is skipped and declared as `unreadable`.
+
+A blob is judged on every path it has had in any commit: content that was once
+`.env` is reported by name even if it was later renamed.
 
 ## The hook: one second earlier
 
@@ -121,7 +146,11 @@ The second catches what has no recognisable prefix, which is most of them.
 
 It reports **file, line and category — never the value**. And it **declares
 what it did not inspect** even when it passes, because a file that was skipped
-and produced no finding looks exactly like a clean one.
+and produced no finding looks exactly like a clean one. If git cannot list the
+staged files, the commit stops: that is nothing inspected, not nothing staged.
+
+It is tested with mawk (the default awk on Debian and Ubuntu, old and new
+builds), gawk, and the BWK awk that macOS also ships.
 
 A false positive is committed deliberately with `git commit --no-verify`.
 
