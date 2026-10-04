@@ -6,6 +6,7 @@ repository with something staged. One test also installs it and lets
 """
 
 import os
+import re
 import shutil
 import subprocess
 import unittest
@@ -33,11 +34,13 @@ class Shapes(unittest.TestCase):
     """Every shape the hook knows, fired one at a time."""
 
     CASES = {
+        "URI with credentials": uri_with_credentials(),
         "PEM private key": pem_private_key(),
         "GitHub token": "gh" + "p_" + "FakeFixture" * 3,
         "Google API key": google_key(),
         "Slack token": "xo" + "xb-" + "0000-fake-fixture",
         "AWS access key": "AK" + "IA" + "FAKEFIXTURE00000",
+        "JWT": jwt(),
         "high-variety value near a secret name":
             "api_key = '" + "Fq7Lm2Zx9Rk4Tw8Hv3Nc" + "'",
     }
@@ -161,6 +164,16 @@ class Declared(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertIn("1 file not inspected", r.stderr)
 
+    def test_binary_with_its_first_nul_past_line_one(self):
+        # A PNG header has its first NUL on the third line. The old check
+        # looked at line one only, and read the rest as text.
+        repo = init_repo(self)
+        stage(repo, {"a.dat": b"\x89PNG\r\n\x1a\n\x00\x00\r\n"
+                              + google_key().encode() + b"\n"})
+        r = run_hook(repo)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("1 file not inspected", r.stderr)
+
     def test_too_large_is_declared(self):
         repo = init_repo(self)
         stage(repo, {"big.txt": "x" * 200 + "\n" + google_key() + "\n"})
@@ -186,6 +199,43 @@ class Declared(unittest.TestCase):
         r = run_hook(repo, GIT_INDEX_FILE=bad)
         self.assertNotEqual(r.returncode, 0, r.stderr)
         self.assertIn("nothing was inspected", r.stderr)
+
+
+class Portable(unittest.TestCase):
+
+    def test_hook_under_every_awk_given(self):
+        # LEAKFORM_TEST_AWKS: a colon-separated list of awk binaries to run
+        # the hook with, as `awk` first on PATH. Unset, the system awk only.
+        # Measured this way: mawk 1.3.4-20200120 and -20240123, gawk 5.2.1,
+        # and the BWK awk 20250116 that macOS also ships.
+        awks = [a for a in os.environ.get("LEAKFORM_TEST_AWKS", "").split(":") if a]
+        if not awks:
+            self.skipTest("LEAKFORM_TEST_AWKS not set")
+        from support import TempDir
+        for awk in awks:
+            with self.subTest(awk=awk):
+                d = TempDir(self).path
+                os.symlink(os.path.abspath(awk), os.path.join(d, "awk"))
+                path = d + os.pathsep + os.environ["PATH"]
+                repo = init_repo(self)
+                stage(repo, {"a.txt": "first\n" + google_key() + "\n" + jwt()
+                             + "\n" + uri_with_credentials() + "\n",
+                             "b.txt": "nothing here\n"})
+                r = run_hook(repo, PATH=path)
+                self.assertEqual(r.returncode, 1, r.stderr)
+                for where in ("a.txt:2  Google API key", "a.txt:3  JWT",
+                              "a.txt:4  URI with credentials"):
+                    self.assertIn(where, r.stderr)
+                self.assertNotIn("not inspected", r.stderr)
+
+    def test_no_interval_expressions_in_the_awk_program(self):
+        # mawk 1.3.4-20200120 - the default awk on Debian 11 and 12 and on
+        # Ubuntu 22.04 - reads `x{20,}` as a literal brace, not a repeat.
+        # A hook written with intervals matched nothing there and passed
+        # every commit. Measured with that build; this guards the source.
+        with open(HOOK) as fh:
+            src = fh.read()
+        self.assertEqual(re.findall(r"[\])][{][0-9]+,?[0-9]*[}]", src), [])
 
 
 if __name__ == "__main__":
