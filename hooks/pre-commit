@@ -18,14 +18,26 @@ set -u
 
 MAX_BYTES=${LEAKFORM_MAX_BYTES:-1048576}
 
-files=$(git diff --cached --name-only --diff-filter=ACM --) || exit 0
+# The staged files: added, copied, modified or changed in type. --no-renames,
+# because a rename that also edits the file is otherwise an R, and R was not
+# in the filter: the new content went through unread. core.quotePath=false,
+# because a name with a non-ASCII letter otherwise arrives in quotes and
+# octal escapes, and git show could not find it.
+#
+# A failure here is not "nothing staged": it is nothing inspected.
+if ! files=$(git -c core.quotePath=false diff --cached --name-only \
+    --no-renames --diff-filter=ACMT --); then
+  printf 'leakform: could not list the staged files: nothing was inspected.\n' >&2
+  printf '          Commit with --no-verify to skip the check deliberately.\n' >&2
+  exit 1
+fi
 [ -n "$files" ] || exit 0
 
 # Un solo awk per file: tutte le forme in un passaggio, piu una prova di
 # entropia per i segreti che non hanno una forma nota. Stampa posizione e
 # categoria, mai il valore.
 scan() {
-  git show ":$1" 2>/dev/null | awk -v file="$1" -v max="$MAX_BYTES" '
+  git cat-file blob ":$1" | awk -v file="$1" -v max="$MAX_BYTES" '
     BEGIN {
       # etichetta -> espressione regolare estesa
       n = 0
@@ -91,7 +103,23 @@ hits=0
 skipped=0
 report=""
 
+# Un nome per riga, e nient'altro: niente divisione sugli spazi, niente
+# espansione di * o ?. Prima "my notes.txt" diventava "my" e "notes.txt",
+# nessuno dei due nell'indice, e il file passava senza essere letto.
+set -f
+old_ifs=$IFS
+IFS='
+'
 for f in $files; do
+  IFS=$old_ifs
+  # Un nome che git restituisce ancora tra virgolette (a capo, tabulazione,
+  # virgolette nel nome) non si puo leggere da qui: si dichiara.
+  case $f in
+    \"*) skipped=$((skipped + 1)); continue ;;
+  esac
+  if ! git cat-file -e ":$f" 2>/dev/null; then
+    skipped=$((skipped + 1)); continue
+  fi
   out=$(scan "$f")
   [ -n "$out" ] || continue
   case $out in
@@ -104,11 +132,13 @@ for f in $files; do
 "
   fi
 done
+IFS=$old_ifs
+set +f
 
 # Un file non esaminato che non produce riscontri e' indistinguibile da un
 # file pulito. La copertura si dichiara sempre, anche quando si passa.
 if [ "$hits" -eq 0 ]; then
-  [ "$skipped" -gt 0 ] && printf 'leakform: %d file not inspected (binary or over %s bytes)\n' \
+  [ "$skipped" -gt 0 ] && printf 'leakform: %d file not inspected (binary, unreadable, or over %s bytes)\n' \
     "$skipped" "$MAX_BYTES" >&2
   exit 0
 fi
@@ -123,7 +153,7 @@ printf '%s' "$report" | while IFS='	' read -r kind file line label; do
   [ "$kind" = "HIT" ] && printf '  %s:%s  %s\n' "$file" "$line" "$label" >&2
 done
 
-[ "$skipped" -gt 0 ] && printf '\n  (%d file not inspected: binary or over %s bytes)\n' \
+[ "$skipped" -gt 0 ] && printf '\n  (%d file not inspected: binary, unreadable, or over %s bytes)\n' \
   "$skipped" "$MAX_BYTES" >&2
 
 cat >&2 <<'MSG'
