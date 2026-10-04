@@ -316,7 +316,11 @@ def scan(repo, max_blob_bytes=MAX_BLOB_BYTES):
                 value = m.group(1) if m.groups() else m.group(0)
                 if m.groups() and PLACEHOLDER.match(value.strip()):
                     continue
-                line = data.count(b"\n", 0, m.start()) + 1
+                # The line of the value, not of the match: long-hex and
+                # long-base64 open with the delimiter before it, which can
+                # be the newline at the end of the previous line.
+                start = m.start(1) if m.groups() else m.start()
+                line = data.count(b"\n", 0, start) + 1
                 findings.append(Finding(name, path, line, len(value), sha, in_head))
                 break  # one hit per category per blob is enough to act on
 

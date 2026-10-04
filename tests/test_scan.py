@@ -121,6 +121,13 @@ class HeadAndHistory(unittest.TestCase):
         repo = make_repo(self, {"a.txt": "one\ntwo\nk = " + google_key() + "\n"})
         self.assertEqual(leakform.scan(repo)["findings"][0]["line"], 3)
 
+    def test_line_number_of_a_shape_that_starts_with_a_delimiter(self):
+        # long-hex and long-base64 open with the character before the value:
+        # a newline, when the value starts a line.
+        repo = make_repo(self, {"a.txt": "one\n" + long_hex() + "\n"})
+        lines = {f["category"]: f["line"] for f in leakform.scan(repo)["findings"]}
+        self.assertEqual(lines.get("long-hex"), 2)
+
     def test_one_blob_reported_once_per_category(self):
         body = "\n".join("k%d = %s" % (i, google_key()) for i in range(3))
         repo = make_repo(self, {"a.txt": body + "\n"})
