@@ -36,35 +36,63 @@ fi
 # Un solo awk per file: tutte le forme in un passaggio, piu una prova di
 # entropia per i segreti che non hanno una forma nota. Stampa posizione e
 # categoria, mai il valore.
+#
+# Nessuna espressione a intervallo ({n,}) nel programma: mawk 1.3.4-20200120,
+# l'awk di default su Debian 11 e 12 e Ubuntu 22.04, le ignora, e
+# mawk 1.3.4-20240123 (Ubuntu 24.04) sbaglia [classe]{n,} seguita da altro.
+# Con gli intervalli il gancio non trovava niente e lasciava passare tutto.
+# Le lunghezze minime si contano nel codice, dopo match().
 scan() {
-  git cat-file blob ":$1" | awk -v file="$1" -v max="$MAX_BYTES" '
+  git cat-file blob ":$1" | awk -v file="$1" '
     BEGIN {
-      # etichetta -> espressione regolare estesa
+      # etichetta, espressione regolare estesa, lunghezza minima del match
       n = 0
-      p[++n] = "URI with credentials";  r[n] = "[a-z][a-z0-9+.-]+://[^:/@ \t]+:[^@/ \t]{6,}@"
-      p[++n] = "PEM private key";       r[n] = "-----BEGIN[A-Z ]*PRIVATE KEY-----"
-      p[++n] = "GitHub token";          r[n] = "gh[pousr]_[A-Za-z0-9]{30,}"
-      p[++n] = "Google API key";        r[n] = "AIza[0-9A-Za-z_-]{30,}"
-      p[++n] = "Slack token";           r[n] = "xox[abprs]-[0-9A-Za-z-]{10,}"
-      p[++n] = "AWS access key";        r[n] = "AKIA[0-9A-Z]{16}"
-      p[++n] = "JWT";                   r[n] = "eyJ[A-Za-z0-9_-]{10,}\\.eyJ[A-Za-z0-9_-]{10,}\\."
-      p[++n] = "private key block";     r[n] = "PRIVATE KEY-----"
+      p[++n] = "PEM private key";       r[n] = "-----BEGIN[A-Z ]*PRIVATE KEY-----";  m[n] = 0
+      p[++n] = "GitHub token";          r[n] = "gh[pousr]_[A-Za-z0-9]+";             m[n] = 34
+      p[++n] = "Google API key";        r[n] = "AIza[0-9A-Za-z_-]+";                 m[n] = 34
+      p[++n] = "Slack token";           r[n] = "xox[abprs]-[0-9A-Za-z-]+";           m[n] = 15
+      p[++n] = "AWS access key";        r[n] = "AKIA[0-9A-Z]+";                      m[n] = 20
+      p[++n] = "private key block";     r[n] = "PRIVATE KEY-----";                   m[n] = 0
       forms = n
-      bytes = 0
     }
 
-    # Un binario non si ispeziona: si salta, e si dichiara.
-    NR == 1 && /\x00/ { print "SKIP\t" file "\t0\tbinary"; exit }
+    function hit(label) { print "HIT\t" file "\t" NR "\t" label }
 
-    {
-      bytes += length($0) + 1
-      if (bytes > max) { print "SKIP\t" file "\t" NR "\ttoo large"; exit }
+    # il primo match di rx in s lungo almeno min caratteri
+    function longest(s, rx, min) {
+      while (match(s, rx)) {
+        if (RLENGTH >= min) return 1
+        s = substr(s, RSTART + RLENGTH)
+      }
+      return 0
     }
 
     # 1 - le forme note
     {
       for (i = 1; i <= forms; i++)
-        if ($0 ~ r[i]) print "HIT\t" file "\t" NR "\t" p[i]
+        if (longest($0, r[i], m[i])) hit(p[i])
+    }
+
+    # URI con credenziali: una password di almeno 6 caratteri
+    {
+      s = $0
+      while (match(s, "[a-z][a-z0-9+.-]+://[^:/@ \t]+:[^@/ \t]+@")) {
+        u = substr(s, RSTART, RLENGTH)
+        s = substr(s, RSTART + RLENGTH)
+        sub(/^[^:]*:[^:]*:/, "", u)
+        if (length(u) - 1 >= 6) { hit("URI with credentials"); break }
+      }
+    }
+
+    # JWT: due segmenti di almeno 10 caratteri dopo eyJ
+    {
+      s = $0
+      while (match(s, "eyJ[A-Za-z0-9_-]+[.]eyJ[A-Za-z0-9_-]+[.]")) {
+        t = substr(s, RSTART, RLENGTH)
+        s = substr(s, RSTART + RLENGTH)
+        split(t, seg, ".")
+        if (length(seg[1]) >= 13 && length(seg[2]) >= 13) { hit("JWT"); break }
+      }
     }
 
     # 2 - le forme che non conosciamo.
@@ -83,16 +111,18 @@ scan() {
     tolower($0) ~ /(secret|passwd|password|token|api[_-]?key|private[_-]?key|credential)/ {
       line = $0
       # 047 ottale = apostrofo, scritto cosi per non chiudere le virgolette di sh
-      while (match(line, /["\047=: ][A-Za-z0-9+\/=_-]{20,}/)) {
+      while (match(line, /["\047=: ][A-Za-z0-9+\/=_-]+/)) {
         tok  = substr(line, RSTART + 1, RLENGTH - 1)
         line = substr(line, RSTART + RLENGTH)
+        if (length(tok) < 20) continue
         # lunga ma povera di caratteri distinti = e un nome, non un segreto
         if (variety(tok) >= 12 && tok !~ /^[A-Za-z_]+$/) {
-          print "HIT\t" file "\t" NR "\thigh-variety value near a secret name"
+          hit("high-variety value near a secret name")
           break
         }
       }
     }
+
   '
 }
 
@@ -117,14 +147,22 @@ for f in $files; do
   case $f in
     \"*) skipped=$((skipped + 1)); continue ;;
   esac
-  if ! git cat-file -e ":$f" 2>/dev/null; then
+  # Dimensione e binario si misurano fuori da awk: il NUL non e portabile.
+  # In awk BWK (quello di macOS) "\000" e la stringa vuota e /\x00/ trova
+  # tutto, quindi ogni file risultava binario e nessuno veniva letto.
+  size=$(git cat-file -s ":$f" 2>/dev/null) || size=""
+  case $size in
+    ""|*[!0-9]*) skipped=$((skipped + 1)); continue ;;
+  esac
+  if [ "$size" -gt "$MAX_BYTES" ]; then
+    skipped=$((skipped + 1)); continue
+  fi
+  nul=$(git cat-file blob ":$f" | tr -dc '\000' | wc -c)
+  if [ "$nul" -gt 0 ]; then
     skipped=$((skipped + 1)); continue
   fi
   out=$(scan "$f")
   [ -n "$out" ] || continue
-  case $out in
-    *"SKIP	"*) skipped=$((skipped + 1)) ;;
-  esac
   n=$(printf '%s\n' "$out" | grep -c '^HIT' || true)
   if [ "$n" -gt 0 ]; then
     hits=$((hits + n))
