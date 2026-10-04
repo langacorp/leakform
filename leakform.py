@@ -135,7 +135,16 @@ class Finding:
         return (self.category, self.path, self.line, self.blob)
 
 
-GIT_TIMEOUT = int(os.environ.get("LEAKFORM_GIT_TIMEOUT", "120"))
+# Read once, at import. A value that is not a number must not stop the module
+# from importing: main() reports it as a usage error instead of a traceback.
+_TIMEOUT_RAW = os.environ.get("LEAKFORM_GIT_TIMEOUT", "120")
+try:
+    GIT_TIMEOUT = int(_TIMEOUT_RAW)
+    _TIMEOUT_ERROR = None
+except ValueError:
+    GIT_TIMEOUT = 120
+    _TIMEOUT_ERROR = ("LEAKFORM_GIT_TIMEOUT must be a whole number of seconds, "
+                      "not %r" % _TIMEOUT_RAW)
 
 
 class GitTimeout(RuntimeError):
@@ -530,6 +539,8 @@ def main(argv=None):
     p.add_argument("--selftest", action="store_true",
                    help="prove the search in both directions and exit")
     p.add_argument("--version", action="version", version=__version__)
+    if _TIMEOUT_ERROR:
+        p.error(_TIMEOUT_ERROR)
     args = p.parse_args(argv)
 
     if args.selftest:
@@ -539,7 +550,7 @@ def main(argv=None):
     if shutil.which("git") is None:
         p.error("git was not found on PATH")
     try:
-        if not is_git_repo(args.repository):
+        if not os.path.isdir(args.repository) or not is_git_repo(args.repository):
             p.error(f"not a git repository: {args.repository}")
         res = scan(args.repository, max_blob_bytes=args.max_blob_bytes)
     except (GitTimeout, GitFailed) as e:
