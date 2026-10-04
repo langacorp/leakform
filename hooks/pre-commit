@@ -47,12 +47,14 @@ scan() {
     BEGIN {
       # etichetta, espressione regolare estesa, lunghezza minima del match
       n = 0
-      p[++n] = "PEM private key";       r[n] = "-----BEGIN[A-Z ]*PRIVATE KEY-----";  m[n] = 0
+      # Le intestazioni PEM sono spezzate in due stringhe (awk le concatena),
+      # perche il gancio non trovi se stesso quando gira su questo repository.
+      p[++n] = "PEM private key";       r[n] = "-----BEGIN[A-Z ]*PRIVATE" " KEY-----";  m[n] = 0
       p[++n] = "GitHub token";          r[n] = "gh[pousr]_[A-Za-z0-9]+";             m[n] = 34
       p[++n] = "Google API key";        r[n] = "AIza[0-9A-Za-z_-]+";                 m[n] = 34
       p[++n] = "Slack token";           r[n] = "xox[abprs]-[0-9A-Za-z-]+";           m[n] = 15
       p[++n] = "AWS access key";        r[n] = "AKIA[0-9A-Z]+";                      m[n] = 20
-      p[++n] = "private key block";     r[n] = "PRIVATE KEY-----";                   m[n] = 0
+      p[++n] = "private key block";     r[n] = "PRIVATE" " KEY-----";                   m[n] = 0
       forms = n
     }
 
