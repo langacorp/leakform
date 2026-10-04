@@ -566,5 +566,10 @@ def main(argv=None):
     return report(res)
 
 
-if __name__ == "__main__":
+def _entry():
+    """Console script entry point: `leakform` once installed with pip."""
     sys.exit(main())
+
+
+if __name__ == "__main__":
+    _entry()

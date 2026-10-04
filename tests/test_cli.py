@@ -82,6 +82,15 @@ class Cli(unittest.TestCase):
         self.assertIn("LEAKFORM_GIT_TIMEOUT", r.stderr)
         self.assertNotIn("Traceback", r.stderr)
 
+    def test_pyproject_reads_the_one_version_constant(self):
+        import os
+        from support import ROOT
+        with open(os.path.join(ROOT, "pyproject.toml")) as fh:
+            text = fh.read()
+        self.assertIn('dynamic = ["version"]', text)
+        self.assertIn('version = {attr = "leakform.__version__"}', text)
+        self.assertNotIn("\nversion =", text.split("[tool.setuptools.dynamic]")[0])
+
 
 if __name__ == "__main__":
     unittest.main()
