@@ -38,5 +38,39 @@ class Environment(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
 
+class EveryPath(unittest.TestCase):
+    """A blob can live at several paths. Every one of them counts."""
+
+    def test_file_renamed_away_from_a_sensitive_name(self):
+        repo = init_repo(self)
+        commit(repo, {".env": "A=1\n"})
+        run_git(repo, "mv", ".env", "notes.txt")
+        commit(repo, message="rename")
+        names = {s["path"] for s in leakform.scan(repo)["sensitive_names"]}
+        self.assertEqual(names, {".env"})
+
+    def test_same_content_under_a_sensitive_and_an_ordinary_name(self):
+        # tree order puts a.txt first, which is the one path git reports
+        repo = make_repo(self, {"a.txt": "same\n", "z/.env": "same\n"})
+        names = {s["path"] for s in leakform.scan(repo)["sensitive_names"]}
+        self.assertEqual(names, {"z/.env"})
+
+    def test_same_content_under_a_binary_and_a_text_name(self):
+        planted = "k = " + google_key() + "\n"
+        repo = make_repo(self, {"a.png": planted, "a.txt": planted})
+        res = leakform.scan(repo)
+        self.assertEqual(categories(res), {"google-api-key"})
+        self.assertEqual(res["coverage"]["blobs_examined"], 1)
+
+    def test_still_silent_when_every_path_is_binary(self):
+        planted = "k = " + google_key() + "\n"
+        repo = make_repo(self, {"a.png": planted, "b.png": planted,
+                                "c.txt": "nothing\n"})
+        res = leakform.scan(repo)
+        self.assertEqual(res["findings"], [])
+        self.assertEqual(res["coverage"]["skipped_by_reason"],
+                         {"binary-extension": 1})
+
+
 if __name__ == "__main__":
     unittest.main()

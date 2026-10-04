@@ -180,6 +180,46 @@ def is_git_repo(path):
     return r.returncode == 0
 
 
+def blob_paths(repo):
+    """Every path every blob has had, in any commit reachable from any ref.
+
+    `rev-list --objects` names each blob once, under the first path it meets.
+    A blob that also lived at `.env`, or was renamed there or away from there,
+    keeps only one of its names - and the scan decides on the names: what is
+    reported by name, what is skipped as binary or vendored. So the paths
+    from every commit's changes are added to it. rev-list stays, because it
+    also covers a tag that points straight at a blob or a tree.
+    """
+    paths = collections.defaultdict(set)
+    for line in git(repo, "rev-list", "--objects", "--all").stdout.split(b"\n"):
+        if b" " in line:
+            sha, _, p = line.partition(b" ")
+            paths[sha.decode()].add(p.decode("utf-8", "replace"))
+
+    # -z: paths verbatim, not quoted. --no-renames: a rename is a delete and
+    # an add, so both names appear. -m: merges against each parent.
+    out = git(repo, "log", "--all", "--raw", "--no-renames", "--root", "-m",
+              "--no-abbrev", "--format=", "-z").stdout
+    fields = out.split(b"\0")
+    i = 0
+    while i < len(fields):
+        meta = fields[i]
+        if not meta.startswith(b":"):
+            i += 1
+            continue
+        # :old_mode new_mode old_sha new_sha status, then the path
+        parts = meta.split()
+        p = fields[i + 1].decode("utf-8", "replace") if i + 1 < len(fields) else ""
+        i += 2
+        if len(parts) < 5 or not p:
+            continue
+        for mode, sha in ((parts[0][1:], parts[2]), (parts[1], parts[3])):
+            # 160000 is a submodule: the sha is a commit somewhere else.
+            if mode != b"160000" and sha.strip(b"0"):
+                paths[sha.decode()].add(p)
+    return paths
+
+
 def compiled():
     return [(name, re.compile(rx)) for name, rx in PATTERNS]
 
@@ -189,11 +229,7 @@ def scan(repo, max_blob_bytes=MAX_BLOB_BYTES):
     pats = compiled()
 
     # blob -> the paths it has ever had. One blob can live at several paths.
-    paths = collections.defaultdict(set)
-    for line in git(repo, "rev-list", "--objects", "--all").stdout.split(b"\n"):
-        if b" " in line:
-            sha, _, p = line.partition(b" ")
-            paths[sha.decode()].add(p.decode("utf-8", "replace"))
+    paths = blob_paths(repo)
 
     head_blobs = set()
     out = git(repo, "ls-tree", "-r", "--format=%(objectname)", "HEAD").stdout
@@ -234,7 +270,10 @@ def scan(repo, max_blob_bytes=MAX_BLOB_BYTES):
             skipped["binary-content"] += 1
             continue
         examined += 1
-        path = sorted(ps)[0]
+        # Report the finding under a path that was read for what it is: a
+        # text path when there is one, the first in order otherwise.
+        path = min(ps, key=lambda p: (p.lower().endswith(BINARY_EXT),
+                                      bool(NOISY_PATH.search(p)), p))
         in_head = sha in head_blobs
         for name, rx in pats:
             for m in rx.finditer(data):
