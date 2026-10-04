@@ -42,7 +42,7 @@ class Shapes(unittest.TestCase):
         "AWS access key": "AK" + "IA" + "FAKEFIXTURE00000",
         "JWT": jwt(),
         "high-variety value near a secret name":
-            "api_key = '" + "Fq7Lm2Zx9Rk4Tw8Hv3Nc" + "'",
+            "api_key = '" + "Fq7Lm2Zx9R" + "k4Tw8Hv3Nc" + "'",
     }
 
     def test_each_shape_fires(self):
