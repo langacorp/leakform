@@ -30,7 +30,7 @@ import subprocess
 import sys
 import tempfile
 
-__version__ = "0.1.0"
+__version__ = "1.2.0"
 
 # --------------------------------------------------------------------------
 # shapes

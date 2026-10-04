@@ -3,7 +3,7 @@
 All notable changes to this project are recorded here.
 Dates are the date of the commit, not of a release.
 
-## Unreleased
+## 1.2.0 - 2026-10-04
 
 Every defect below was reproduced first, and each fix comes with a test that
 failed on the old code.

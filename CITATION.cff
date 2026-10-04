@@ -11,5 +11,5 @@ authors:
 repository-code: "https://github.com/langacorp/leakform"
 url: "https://github.com/langacorp/leakform"
 license: MIT
-version: "1.1.0"
-date-released: "2026-08-30"
+version: "1.2.0"
+date-released: "2026-10-04"
