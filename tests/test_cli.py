@@ -69,6 +69,19 @@ class Cli(unittest.TestCase):
         self.assertEqual(r.returncode, 2)
         self.assertEqual(json.loads(r.stdout)["coverage"]["blobs_examined"], 0)
 
+    def test_missing_path_is_a_usage_error_not_a_traceback(self):
+        tmp = __import__("support").TempDir(self).path
+        r = run_cli(tmp + "/does-not-exist")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("not a git repository", r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+
+    def test_bad_timeout_value_is_a_message_not_a_traceback(self):
+        r = run_cli("--version", env=clean_env(LEAKFORM_GIT_TIMEOUT="soon"))
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("LEAKFORM_GIT_TIMEOUT", r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
