@@ -23,16 +23,18 @@ jobs:
   selftest:
     # ubuntu-22.04 keeps the floor honest: Python 3.8 is still installable
     # there, and its git (2.34) is older than the 2.36 that some options
-    # need. The newest runner covers the other end.
+    # need. ubuntu-latest (26.04) no longer ships 3.9, so 3.9 runs on
+    # ubuntu-24.04. The newest runner covers the other end.
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - { os: ubuntu-22.04, python: "3.8" }
-          - { os: ubuntu-latest, python: "3.9" }
+          - { os: ubuntu-24.04, python: "3.9" }
           - { os: ubuntu-latest, python: "3.11" }
           - { os: ubuntu-latest, python: "3.13" }
+          - { os: ubuntu-latest, python: "3.15" }
     steps:
       - uses: actions/checkout@v7
 
@@ -65,7 +67,7 @@ jobs:
 
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: "3.15"
 
       - name: Install the awks
         run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends mawk gawk
