@@ -57,13 +57,22 @@ jobs:
 
   floor:
     # The floor without the ubuntu-22.04 runner, which GitHub retires in
-    # April 2027: Python 3.8 from the official image, on Debian bullseye,
-    # whose git (2.30) is older than the 2.36 that some options need. The
-    # same steps as above, so the floor is tested exactly like the rest.
+    # April 2027: the same Ubuntu 22.04 userland as a container, with its
+    # git (2.34, older than the 2.36 that some options need) and Python 3.8.
+    # git is installed before checkout so the tests run in a real clone.
     runs-on: ubuntu-latest
-    container: python:3.8-bullseye
+    container: ubuntu:22.04
     steps:
+      - name: Install git
+        run: |
+          apt-get update -q
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates
+
       - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.8"
 
       - name: Versions
         run: python --version && git --version
