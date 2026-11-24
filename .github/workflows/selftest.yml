@@ -92,6 +92,27 @@ jobs:
       - name: Unit tests
         run: python -m unittest discover -s tests -v
 
+  old-git:
+    # git 2.30, older than anything a supported Ubuntu runner has. On it
+    # `rev-list --all` skipped a broken ref with a warning and exit 0, and a
+    # repository that was not read whole was reported as scanned.
+    runs-on: ubuntu-latest
+    container: python:3.8-bullseye
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Versions
+        run: python --version && git --version
+
+      - name: Self-test
+        run: python leakform.py --selftest
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+
   hook:
     # The hook runs under whatever awk the machine has. mawk is the default
     # on Debian and Ubuntu, gawk elsewhere; the hook was once right for one

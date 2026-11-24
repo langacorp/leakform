@@ -155,9 +155,9 @@ class GitFailed(RuntimeError):
     """git answered with an error. Its empty output is not an empty answer."""
 
 
-def git_ok(repo, *args):
+def git_ok(repo, *args, stdin=None):
     """Run git and return stdout, or raise: a failure is not an empty list."""
-    r = git(repo, *args)
+    r = git(repo, *args, stdin=stdin)
     if r.returncode != 0:
         msg = r.stderr.decode("utf-8", "replace").strip().splitlines()
         raise GitFailed("git %s failed (exit %d): %s" % (
@@ -180,7 +180,7 @@ def _git_env():
     return {k: v for k, v in os.environ.items() if k not in _GIT_LOCATION_ENV}
 
 
-def git(repo, *args):
+def git(repo, *args, stdin=None):
     """
     Run git, and never wait forever.
 
@@ -191,7 +191,8 @@ def git(repo, *args):
     """
     try:
         return subprocess.run(("git",) + args, cwd=repo, env=_git_env(),
-                              capture_output=True, timeout=GIT_TIMEOUT)
+                              input=stdin, capture_output=True,
+                              timeout=GIT_TIMEOUT)
     except subprocess.TimeoutExpired:
         raise GitTimeout(
             "git %s took longer than %ds. Raise LEAKFORM_GIT_TIMEOUT if the "
@@ -201,6 +202,32 @@ def git(repo, *args):
 def is_git_repo(path):
     r = git(path, "rev-parse", "--git-dir")
     return r.returncode == 0
+
+
+def refs_or_fail(repo):
+    """Every ref, after checking that each one points at an object git has.
+
+    A ref pointing at a missing object is a part of the repository that
+    cannot be read. git since 2.34 or so fails `rev-list --all` on it; older
+    git only warns "ignoring broken ref", exits 0, and goes on without that
+    ref, so the scan reported a repository it had not read whole. This check
+    asks the same question on every git: `for-each-ref` lists broken refs too,
+    and `cat-file --batch-check` says which of their objects are missing.
+    """
+    out = git_ok(repo, "for-each-ref", "--format=%(objectname) %(refname)")
+    pairs = []
+    for line in out.split(b"\n"):
+        sha, _, name = line.strip().partition(b" ")
+        if sha and name:
+            pairs.append((sha.decode(), name.decode("utf-8", "replace")))
+    if pairs:
+        check = git_ok(repo, "cat-file", "--batch-check=%(objectname)",
+                       stdin="".join(sha + "\n" for sha, _ in pairs).encode())
+        for (sha, name), line in zip(pairs, check.decode().split("\n")):
+            if line.strip() != sha:
+                raise GitFailed("ref %s points at %s, which is not in the "
+                                "repository" % (name, sha))
+    return [name for _, name in pairs]
 
 
 def blob_paths(repo):
@@ -271,6 +298,10 @@ def scan(repo, max_blob_bytes=MAX_BLOB_BYTES):
     """Read every blob reachable from every ref. Return findings and coverage."""
     pats = compiled()
 
+    # First, before anything is counted: a ref that cannot be read means the
+    # repository cannot be read whole, on every version of git.
+    refs = refs_or_fail(repo)
+
     # blob -> the paths it has ever had. One blob can live at several paths.
     paths = blob_paths(repo)
 
@@ -332,10 +363,6 @@ def scan(repo, max_blob_bytes=MAX_BLOB_BYTES):
                 line = data.count(b"\n", 0, start) + 1
                 findings.append(Finding(name, path, line, len(value), sha, in_head))
                 break  # one hit per category per blob is enough to act on
-
-    refs = [l.strip().decode("utf-8", "replace") for l in
-            git_ok(repo, "for-each-ref", "--format=%(refname)").split(b"\n")
-            if l.strip()]
 
     return {
         "version": __version__,

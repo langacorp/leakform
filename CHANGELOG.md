@@ -3,6 +3,18 @@
 All notable changes to this project are recorded here.
 Dates are the date of the commit, not of a release.
 
+## Unreleased
+
+- A ref pointing at a missing object stops the scan on every version of git.
+  git older than about 2.34 only warned "ignoring broken ref" in
+  `rev-list --all` and exited 0, so the scan went on without that ref and
+  reported the repository as read: exit 1 or 0 instead of 2. Every ref is now
+  checked against the object store before anything is counted. The existing
+  test failed on git 2.30 and passes now.
+- CI: Python 3.8 runs in an `ubuntu:22.04` container, as the ubuntu-22.04
+  runner is retired in April 2027; 3.9 on ubuntu-24.04; 3.11, 3.13 and 3.15
+  on the newest runner; and a job on git 2.30.
+
 ## 1.2.0 - 2026-10-04
 
 Every defect below was reproduced first, and each fix comes with a test that
